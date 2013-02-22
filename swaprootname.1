@@ -25,12 +25,5 @@ Temporary mode:
 .I stdin
 for lines; for every line received, immediately set root window name to that
 line. On end-of-file received, revert root window name back to original.
-
-.SH BUGS
-Currently, when
-.B swaprootname
-receives a signal like SIGINT, it fails to revert root window name back to
-original.
-
 .SH SEE ALSO
 .BR dwmstatus (1)

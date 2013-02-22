@@ -1,14 +1,33 @@
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
+sig_atomic_t halt_now = 0;
+
+static void sighandler(int sig) {
+	halt_now = 1;
+}
+
+static void install_sighandlers(void) {
+	struct sigaction handler;
+	handler.sa_handler = sighandler;
+	sigemptyset(&handler.sa_mask);
+	handler.sa_flags = SA_NODEFER;
+
+	sigaction(SIGINT, &handler, NULL);
+	sigaction(SIGTERM, &handler, NULL);
+}
+
 #define BUF_SIZE 256
 int main(int argc, char **argv) {
-	Display *dpy = XOpenDisplay(NULL);
+	Display *dpy;
 	Window win;
 
-	if (!dpy) {
+	install_sighandlers();
+
+	if (!(dpy = XOpenDisplay(NULL))) {
 		fprintf(stderr, "failed to open display.");
 		return 1;
 	}
@@ -25,7 +44,7 @@ int main(int argc, char **argv) {
 		char buf[BUF_SIZE], *ptr=buf;
 		size_t len;
 		XGetWMName(dpy, win, &orig_prop);
-		while (fgets(buf, BUF_SIZE, stdin)) {
+		while (!halt_now && fgets(buf, BUF_SIZE, stdin)) {
 			len = strlen(buf);
 			if (buf[len-1] == '\n') buf[len-1] = 0;
 			XmbTextListToTextProperty(dpy, &ptr, 1, XTextStyle, &prop);
