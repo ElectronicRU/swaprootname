@@ -1,5 +1,5 @@
 # swaprootname version
-VERSION = 0.1
+VERSION = 0.2
 
 # Customize below to fit your system
 
@@ -16,8 +16,8 @@ LIBS = -L/usr/lib -lc -L${X11LIB} -lX11
 
 # flags
 CPPFLAGS = -DVERSION=\"${VERSION}\"
-CFLAGS = -std=c99 -D_XOPEN_SOURCE=500 -pedantic -Wall -Os ${INCS} ${CPPFLAGS}
-LDFLAGS = -s ${LIBS}
+CFLAGS = -g -std=c99 -D_XOPEN_SOURCE=500 -pedantic -Wall ${INCS} ${CPPFLAGS}
+LDFLAGS = -g -s ${LIBS}
 
 # compiler and linker
 CC = cc
