@@ -1,6 +1,7 @@
-#include <stdio.h>
-#include <string.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
@@ -20,10 +21,71 @@ static void install_sighandlers(void) {
 	sigaction(SIGTERM, &handler, NULL);
 }
 
+char **ealloc(int len) {
+	char **result = calloc(len, sizeof(char *));
+	if (!result)
+		exit(1);
+	return result;
+}
+
+void mumblecpy(char **dst, char **src, int len) {
+	memcpy(dst, src, len * sizeof(char *));
+}
+
+int poppush(Display *dpy, Window win, char *old, char *new) {
+	XTextProperty prop;
+	char **returned_list, **new_list;
+	int i, len;
+	XGetWMName(dpy, win, &prop);
+	XmbTextPropertyToTextList(dpy, &prop, &returned_list, &len);
+	XFree(prop.value);
+	if (old == NULL) {
+		new_list = ealloc(len + 1);
+		mumblecpy(new_list + 1, returned_list, len);
+		len += 1;
+		i = 0;
+	} else {
+		for (i = 0; i < len; i ++) {
+			if (!strcmp(returned_list[i], old))
+				break;
+		}
+		if (i == len) {
+			XFreeStringList(returned_list);
+			return 1;
+		}
+		if (i != 0) {
+			new_list = ealloc(len);
+			mumblecpy(new_list + 1, returned_list, i);
+			mumblecpy(new_list + i + 1, returned_list + i + 1, len - i - 1);
+		} else {
+			new_list = returned_list;
+		}
+	}
+	if (new != NULL) {
+		char *old = new_list[0];
+		new_list[0] = new;
+		XmbTextListToTextProperty(dpy, new_list, len, XTextStyle, &prop);
+		new_list[0] = old;
+	} else {
+		XmbTextListToTextProperty(dpy, new_list + 1, len - 1, XTextStyle, &prop);
+	}
+	XSetWMName(dpy, win, &prop);
+	XFree(prop.value);
+	if (new_list != returned_list)
+		free(new_list);
+	XFreeStringList(returned_list);
+	return 0;
+}
+
+
+
 #define BUF_SIZE 256
 int main(int argc, char **argv) {
 	Display *dpy;
 	Window win;
+	char buf1[BUF_SIZE] = "", buf2[BUF_SIZE] = "";
+	char *buf = buf1, *old_buf = NULL;
+	size_t len;
 
 	install_sighandlers();
 
@@ -34,24 +96,23 @@ int main(int argc, char **argv) {
 	win = DefaultRootWindow(dpy);
 
 	if (argc > 1) {
+		/* set WM_NAME to the first command-line argument, permanently */
 		XTextProperty prop;
-		/* what are we, fucking echo? we will NOT glue them */
-		Xutf8TextListToTextProperty(dpy, argv + 1, 1, XUTF8StringStyle, &prop);
+		XmbTextListToTextProperty(dpy, argv + 1, 1, XTextStyle, &prop);
 		XSetWMName(dpy, win, &prop);
 		XSync(dpy, 0);
 	} else {
-		XTextProperty prop, orig_prop;
-		char buf[BUF_SIZE], *ptr=buf;
-		size_t len;
-		XGetWMName(dpy, win, &orig_prop);
 		while (!halt_now && fgets(buf, BUF_SIZE, stdin)) {
+			buf[BUF_SIZE - 1] = 0;
 			len = strlen(buf);
-			if (buf[len-1] == '\n') buf[len-1] = 0;
-			XmbTextListToTextProperty(dpy, &ptr, 1, XTextStyle, &prop);
-			XSetWMName(dpy, win, &prop);
+			if (buf[len-1] == '\n') 
+				buf[len-1] = 0;
+			poppush(dpy, win, old_buf, buf);
 			XSync(dpy, 0);
+			old_buf = buf;
+			buf = (old_buf == buf1) ? buf2 : buf1;
 		}
-		XSetWMName(dpy, win, &orig_prop);
+		poppush(dpy, win, old_buf, NULL);
 		XSync(dpy, 0);
 		
 	}
